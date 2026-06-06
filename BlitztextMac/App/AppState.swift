@@ -40,6 +40,7 @@ final class AppState {
         didSet {
             saveSettings()
             prewarmLocalTranscriptionIfNeeded()
+            SystemAudioMuteService.shared.isEnabled = appSettings.muteMusicWhileRecording
         }
     }
     var transcriptionSettings: TranscriptionSettings {
@@ -76,6 +77,7 @@ final class AppState {
         self.textImprovementSettings = Self.loadTextImprovementSettings()
         self.dampfAblassenSettings = Self.loadDampfAblassenSettings()
         self.emojiTextSettings = Self.loadEmojiTextSettings()
+        SystemAudioMuteService.shared.isEnabled = appSettings.muteMusicWhileRecording
         refreshAccessibilityPermission()
         autoSelectFastLocalModelIfNeeded()
         prewarmLocalTranscriptionIfNeeded()

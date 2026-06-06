@@ -98,6 +98,10 @@ struct MenuBarView: View {
                     .padding(.bottom, 6)
             }
 
+            muteMusicPanel
+                .padding(.horizontal, 16)
+                .padding(.bottom, 6)
+
             // Workflow list
             VStack(spacing: 0) {
                 ForEach(WorkflowType.mainMenuCases) { type in
@@ -200,6 +204,43 @@ struct MenuBarView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.primary.opacity(0.035))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        )
+    }
+
+    private var muteMusicPanel: some View {
+        HStack(spacing: 10) {
+            Image(systemName: appState.appSettings.muteMusicWhileRecording ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(appState.appSettings.muteMusicWhileRecording ? .orange : .secondary)
+                .frame(width: 22, height: 22)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Musik beim Diktieren stummschalten")
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .foregroundStyle(.primary)
+
+                Text("Schaltet während der Aufnahme die Systemausgabe stumm und danach wieder an.")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 4)
+
+            Toggle("", isOn: $appState.appSettings.muteMusicWhileRecording)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
         }
         .padding(10)
         .background(

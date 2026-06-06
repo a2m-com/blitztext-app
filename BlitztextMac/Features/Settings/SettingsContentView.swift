@@ -593,6 +593,19 @@ struct CustomizeSettingsView: View {
                 }
             }
 
+            // MARK: Audio
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(text: "Audio")
+
+                Toggle("Musik beim Diktieren stummschalten", isOn: $appState.appSettings.muteMusicWhileRecording)
+                    .toggleStyle(.switch)
+
+                Text("Während einer Aufnahme wird die Systemausgabe (Musik, Videos) automatisch stummgeschaltet und nach Ende der Aufnahme wiederhergestellt.")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             // MARK: Tastenkuerzel
             VStack(alignment: .leading, spacing: 10) {
                 SectionLabel(text: "Tastenk\u{00FC}rzel")

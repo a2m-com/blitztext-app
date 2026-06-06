@@ -42,6 +42,9 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
             audioRecorder?.record()
             isRecording = true
             startMetering()
+            // Hintergrundmusik stummschalten, sobald die Aufnahme tatsächlich läuft
+            // (der Dienst prüft selbst, ob die Einstellung aktiv ist).
+            SystemAudioMuteService.shared.muteOutput()
         } catch {
             currentFileURL = nil
             errorMessage = "Aufnahme konnte nicht gestartet werden: \(error.localizedDescription)"
@@ -57,9 +60,13 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
         currentFileURL = nil
         audioRecorder = nil
         audioLevel = 0
+        // Ton sofort nach Ende der Aufnahme wiederherstellen (Transkription läuft danach).
+        SystemAudioMuteService.shared.restoreOutput()
     }
 
     func discardRecording() {
+        // Sicherheitsnetz: auch bei verworfenen Aufnahmen den Ton wiederherstellen.
+        SystemAudioMuteService.shared.restoreOutput()
         if let recordingURL {
             try? FileManager.default.removeItem(at: recordingURL)
             self.recordingURL = nil
@@ -89,8 +96,10 @@ final class AudioRecorder: NSObject, AVAudioRecorderDelegate {
     // MARK: - AVAudioRecorderDelegate
 
     nonisolated func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        if !flag {
-            Task { @MainActor in
+        Task { @MainActor in
+            // Egal ob erfolgreich oder nicht: Ton darf nie dauerhaft stumm bleiben.
+            SystemAudioMuteService.shared.restoreOutput()
+            if !flag {
                 self.errorMessage = "Aufnahme fehlgeschlagen"
             }
         }
