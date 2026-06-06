@@ -1,0 +1,26 @@
+name: Blitztext App bauen
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    name: Build macOS app
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app || sudo xcode-select -s /Applications/Xcode.app
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Build (Release)
+        run: ./build.sh --release
+      - name: App verpacken
+        run: ditto -c -k --sequesterRsrc --keepParent Blitztext.app Blitztext-app.zip
+      - name: App als Download bereitstellen
+        uses: actions/upload-artifact@v4
+        with:
+          name: Blitztext
+          path: Blitztext-app.zip
