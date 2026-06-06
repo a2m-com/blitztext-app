@@ -59,6 +59,9 @@ final class AppState {
     // Hotkeys
     let hotkeyService = HotkeyService()
 
+    // Lokaler Verlauf der erzeugten Texte (Sicherheitsnetz)
+    let history = TranscriptHistoryService()
+
     // Computed
     var isConfigured: Bool {
         KeychainService.isConfigured || !LocalTranscriptionService.installedModels().isEmpty
@@ -450,6 +453,11 @@ final class AppState {
     }
 
     private func handleWorkflowOutput(_ text: String) {
+        // Zuerst sichern (Sicherheitsnetz), dann einfügen. Das Speichern ist eine
+        // winzige, lokale Operation und verzögert das Einfügen nicht spürbar.
+        if appSettings.historyEnabled {
+            history.add(text)
+        }
         pasteAtCursor(text, target: activePasteTarget)
         if activeLaunchSource == .hotkeyBackground {
             page = .main

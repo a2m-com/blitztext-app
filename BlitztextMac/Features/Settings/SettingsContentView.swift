@@ -11,6 +11,7 @@ struct SettingsContentView: View {
             Picker("", selection: $selectedTab) {
                 Text("Anpassen").tag(0)
                 Text("Zugang").tag(1)
+                Text("Verlauf").tag(2)
             }
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
@@ -19,8 +20,10 @@ struct SettingsContentView: View {
             ScrollView {
                 if selectedTab == 0 {
                     CustomizeSettingsView(appState: appState)
-                } else {
+                } else if selectedTab == 1 {
                     AccessSettingsView(appState: appState)
+                } else {
+                    HistorySettingsView(appState: appState)
                 }
             }
         }
@@ -50,6 +53,93 @@ private struct SectionLabel: View {
         Text(text.uppercased())
             .font(.system(size: 11, weight: .medium))
             .foregroundStyle(.secondary)
+    }
+}
+
+// MARK: - History Settings (Tab 3: Verlauf)
+
+struct HistorySettingsView: View {
+    @Bindable var appState: AppState
+    @State private var copiedEntryID: UUID?
+
+    private var entries: [TranscriptHistoryEntry] {
+        appState.history.entries
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 10) {
+                SectionLabel(text: "Verlauf")
+
+                Toggle("Verlauf speichern", isOn: $appState.appSettings.historyEnabled)
+                    .toggleStyle(.switch)
+
+                Text("Jeder fertige Text wird lokal auf diesem Mac gespeichert (max. 100 Einträge) – als Sicherheitsnetz, falls das Einfügen einmal hakt oder du wegklickst. Nichts verlässt deinen Mac.")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if entries.isEmpty {
+                Text("Noch keine Einträge.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack {
+                    Text("\(entries.count) Einträge")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Verlauf löschen") {
+                        appState.history.clear()
+                    }
+                    .buttonStyle(SubtleButtonStyle())
+                }
+
+                VStack(spacing: 8) {
+                    ForEach(entries) { entry in
+                        historyRow(entry)
+                    }
+                }
+            }
+        }
+        .padding(16)
+    }
+
+    private func historyRow(_ entry: TranscriptHistoryEntry) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(entry.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+
+                Spacer()
+
+                Button(copiedEntryID == entry.id ? "Kopiert ✓" : "Kopieren") {
+                    appState.copyToClipboard(entry.text)
+                    copiedEntryID = entry.id
+                }
+                .buttonStyle(SubtleButtonStyle())
+                .controlSize(.small)
+            }
+
+            Text(entry.text)
+                .font(.system(size: 11.5))
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(8)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.primary.opacity(0.035))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        )
     }
 }
 

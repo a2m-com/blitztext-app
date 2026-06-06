@@ -123,6 +123,7 @@ struct AppSettings: Codable {
     var selectedLocalTranscriptionModelName: String = LocalTranscriptionService.recommendedFastModelName
     var hasAutoSelectedFastLocalModel: Bool = false
     var muteMusicWhileRecording: Bool = false
+    var historyEnabled: Bool = true
 
     init(
         hotkeyMode: HotkeyMode = .hold,
@@ -130,7 +131,8 @@ struct AppSettings: Codable {
         secureLocalModeEnabled: Bool = false,
         selectedLocalTranscriptionModelName: String = LocalTranscriptionService.recommendedFastModelName,
         hasAutoSelectedFastLocalModel: Bool = false,
-        muteMusicWhileRecording: Bool = false
+        muteMusicWhileRecording: Bool = false,
+        historyEnabled: Bool = true
     ) {
         self.hotkeyMode = hotkeyMode
         self.hasSeenOnboarding = hasSeenOnboarding
@@ -138,6 +140,7 @@ struct AppSettings: Codable {
         self.selectedLocalTranscriptionModelName = selectedLocalTranscriptionModelName
         self.hasAutoSelectedFastLocalModel = hasAutoSelectedFastLocalModel
         self.muteMusicWhileRecording = muteMusicWhileRecording
+        self.historyEnabled = historyEnabled
     }
 
     enum CodingKeys: String, CodingKey {
@@ -147,6 +150,7 @@ struct AppSettings: Codable {
         case selectedLocalTranscriptionModelName
         case hasAutoSelectedFastLocalModel
         case muteMusicWhileRecording
+        case historyEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -163,6 +167,7 @@ struct AppSettings: Codable {
             forKey: .hasAutoSelectedFastLocalModel
         ) ?? false
         muteMusicWhileRecording = try container.decodeIfPresent(Bool.self, forKey: .muteMusicWhileRecording) ?? false
+        historyEnabled = try container.decodeIfPresent(Bool.self, forKey: .historyEnabled) ?? true
     }
 }
 
