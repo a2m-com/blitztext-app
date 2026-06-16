@@ -697,37 +697,7 @@ struct CustomizeSettingsView: View {
             }
 
             // MARK: Tastenkuerzel
-            VStack(alignment: .leading, spacing: 10) {
-                SectionLabel(text: "Tastenk\u{00FC}rzel")
-
-                VStack(spacing: 6) {
-                    ForEach(WorkflowType.mainMenuCases) { type in
-                        HStack {
-                            Text(type.hotkeyLabel)
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 124, alignment: .leading)
-                            Text(appState.displayName(for: type))
-                                .font(.system(size: 11.5, weight: .medium))
-                            Spacer()
-                        }
-                    }
-                }
-
-                // Mode picker
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Modus")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-
-                    Picker("", selection: $appState.appSettings.hotkeyMode) {
-                        ForEach(HotkeyMode.allCases) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
-            }
+            HotkeyBindingsSection(appState: appState)
 
             // MARK: Blitztext+
             VStack(alignment: .leading, spacing: 10) {
@@ -936,5 +906,215 @@ struct FlowLayout: Layout {
         }
 
         return (positions, CGSize(width: maxX, height: y + rowHeight))
+    }
+}
+
+// MARK: - Tastenkürzel-Abschnitt (frei belegbar)
+
+private struct HotkeyBindingsSection: View {
+    @Bindable var appState: AppState
+    @StateObject private var capture = HotkeyCapture()
+    @State private var capturingType: WorkflowType?
+    @State private var warningText: String = ""
+
+    private var bindings: [WorkflowType: HotkeyBinding] { appState.resolvedHotkeyBindings }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Tastenk\u{00FC}rzel")
+
+            VStack(spacing: 6) {
+                ForEach(WorkflowType.allCases) { type in
+                    row(for: type)
+                }
+            }
+
+            if !warningText.isEmpty {
+                Text(warningText)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Button("Alle auf Standard zur\u{00FC}cksetzen") {
+                    appState.resetAllHotkeyBindings()
+                    warningText = ""
+                }
+                .buttonStyle(SubtleButtonStyle())
+                Spacer()
+            }
+
+            Text("Klicke „\u{00C4}ndern\u{201C}, dann dr\u{00FC}cke die gew\u{00FC}nschte Tastenkombination (z. B. fn + Shift) oder eine Maus-Zusatztaste (ab Taste 3). Escape bricht die Aufnahme ab.")
+                .font(.system(size: 10.5))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Modus (Halten / Drücken)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Modus")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $appState.appSettings.hotkeyMode) {
+                    ForEach(HotkeyMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+        }
+        .onDisappear {
+            // Sicherheitsnetz: laufende Aufnahme abbrechen, Hotkeys wieder aktivieren.
+            if capture.isCapturing {
+                capture.cancel()
+                capturingType = nil
+                appState.hotkeyService.start()
+            }
+        }
+    }
+
+    private func row(for type: WorkflowType) -> some View {
+        let binding = bindings[type] ?? HotkeyBinding.default(for: type)
+        let isThisCapturing = capturingType == type && capture.isCapturing
+        let hasConflict = conflictExists(for: type, binding: binding)
+        let otherIsCapturing = capture.isCapturing && capturingType != type
+
+        return HStack(spacing: 8) {
+            Text(appState.displayName(for: type))
+                .font(.system(size: 11.5, weight: .medium))
+                .frame(width: 108, alignment: .leading)
+
+            Text(isThisCapturing ? "Tasten dr\u{00FC}cken \u{2026}" : binding.displayString)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(isThisCapturing ? Color.accentColor : (hasConflict ? .orange : .secondary))
+                .frame(minWidth: 120, alignment: .leading)
+
+            if hasConflict {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.orange)
+                    .help("Dieses K\u{00FC}rzel ist mehrfach vergeben.")
+            }
+
+            Spacer()
+
+            Button(isThisCapturing ? "\u{2026}" : "\u{00C4}ndern") {
+                startCapture(for: type)
+            }
+            .buttonStyle(SubtleButtonStyle())
+            .disabled(otherIsCapturing)
+
+            Button {
+                appState.resetHotkeyBinding(for: type)
+                warningText = ""
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+            }
+            .buttonStyle(SubtleButtonStyle())
+            .help("Auf Standard zur\u{00FC}cksetzen")
+            .disabled(capture.isCapturing)
+        }
+    }
+
+    private func conflictExists(for type: WorkflowType, binding: HotkeyBinding) -> Bool {
+        guard !binding.isEmpty else { return false }
+        return bindings.contains { $0.key != type && $0.value == binding }
+    }
+
+    private func startCapture(for type: WorkflowType) {
+        warningText = ""
+        capturingType = type
+        // Globale Hotkeys pausieren, damit die Aufnahme nichts auslöst.
+        appState.hotkeyService.stop()
+        capture.begin { binding in
+            appState.hotkeyService.start()
+            capturingType = nil
+            guard let binding, !binding.isEmpty else { return } // abgebrochen / ungültig
+            appState.setHotkeyBinding(binding, for: type)
+
+            if binding.isBareTypingKey {
+                warningText = "Achtung: „\(binding.displayString)\u{201C} ist eine normale Schreibtaste ohne Zusatztaste \u{2013} sie l\u{00F6}st beim Tippen st\u{00E4}ndig aus. Besser mit fn / Ctrl / Option / Shift / Cmd kombinieren."
+            } else if appState.resolvedHotkeyBindings.contains(where: { $0.key != type && $0.value == binding }) {
+                warningText = "Achtung: „\(binding.displayString)\u{201C} ist bereits einem anderen Befehl zugewiesen. Bitte ein anderes K\u{00FC}rzel w\u{00E4}hlen."
+            }
+        }
+    }
+}
+
+// MARK: - Aufnahme einer Tastenkombination / Maustaste
+
+@MainActor
+private final class HotkeyCapture: ObservableObject {
+    @Published var isCapturing = false
+
+    private var monitor: Any?
+    private var pendingFlags: NSEvent.ModifierFlags = []
+    private var onResult: ((HotkeyBinding?) -> Void)?
+
+    func begin(onResult: @escaping (HotkeyBinding?) -> Void) {
+        cancel() // evtl. laufende Aufnahme beenden
+        self.onResult = onResult
+        isCapturing = true
+        pendingFlags = []
+        monitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .flagsChanged, .otherMouseDown]
+        ) { [weak self] event in
+            Task { @MainActor in self?.handle(event) }
+            return nil // Ereignis während der Aufnahme schlucken
+        }
+    }
+
+    /// Bricht eine laufende Aufnahme ohne Ergebnis ab.
+    func cancel() {
+        finish(nil)
+    }
+
+    private func handle(_ event: NSEvent) {
+        switch event.type {
+        case .keyDown:
+            if event.keyCode == 53 { // Escape bricht ab
+                finish(nil)
+                return
+            }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            finish(.keyboard(flags, keyCode: event.keyCode))
+
+        case .flagsChanged:
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if flags.isEmpty {
+                // Alle Modifier losgelassen -> als reine Modifier-Kombination übernehmen.
+                if !pendingFlags.isEmpty {
+                    finish(.keyboard(pendingFlags, keyCode: nil))
+                }
+            } else {
+                pendingFlags.formUnion(flags)
+            }
+
+        case .otherMouseDown:
+            let button = event.buttonNumber
+            // Nur Zusatztasten ab der dritten Taste; links/rechts kommen nicht hier an.
+            if button >= 2 {
+                finish(.mouse(button: button))
+            }
+
+        default:
+            break
+        }
+    }
+
+    private func finish(_ binding: HotkeyBinding?) {
+        if let monitor {
+            NSEvent.removeMonitor(monitor)
+        }
+        monitor = nil
+        pendingFlags = []
+        let callback = onResult
+        onResult = nil
+        let wasCapturing = isCapturing
+        isCapturing = false
+        if wasCapturing {
+            callback?(binding)
+        }
     }
 }

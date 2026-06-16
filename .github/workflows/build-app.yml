@@ -17,8 +17,18 @@ jobs:
         run: brew install xcodegen
       - name: Build (Release)
         run: ./build.sh --release
-      - name: App verpacken
-        run: ditto -c -k --sequesterRsrc --keepParent Blitztext.app Blitztext-app.zip
+      - name: ZIP fuer Weitergabe schnueren (App + Installieren.command)
+        run: |
+          set -e
+          APP="$(ls -d *.app | head -1)"
+          echo "Gefundene App: $APP"
+          STAGE="Blitztext"
+          rm -rf "$STAGE"
+          mkdir -p "$STAGE"
+          cp -R "$APP" "$STAGE/"
+          cp Installieren.command "$STAGE/"
+          chmod +x "$STAGE/Installieren.command"
+          ditto -c -k --sequesterRsrc --keepParent "$STAGE" Blitztext-app.zip
       - name: App als Download bereitstellen
         uses: actions/upload-artifact@v4
         with:

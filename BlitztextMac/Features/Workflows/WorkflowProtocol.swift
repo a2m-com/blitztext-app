@@ -124,6 +124,9 @@ struct AppSettings: Codable {
     var hasAutoSelectedFastLocalModel: Bool = false
     var muteMusicWhileRecording: Bool = false
     var historyEnabled: Bool = true
+    /// Frei belegbare Tastenkürzel pro Workflow (Schlüssel = WorkflowType.rawValue).
+    /// Leer = überall die Standardwerte verwenden.
+    var hotkeyBindings: [String: HotkeyBinding] = [:]
 
     init(
         hotkeyMode: HotkeyMode = .hold,
@@ -132,7 +135,8 @@ struct AppSettings: Codable {
         selectedLocalTranscriptionModelName: String = LocalTranscriptionService.recommendedFastModelName,
         hasAutoSelectedFastLocalModel: Bool = false,
         muteMusicWhileRecording: Bool = false,
-        historyEnabled: Bool = true
+        historyEnabled: Bool = true,
+        hotkeyBindings: [String: HotkeyBinding] = [:]
     ) {
         self.hotkeyMode = hotkeyMode
         self.hasSeenOnboarding = hasSeenOnboarding
@@ -141,6 +145,7 @@ struct AppSettings: Codable {
         self.hasAutoSelectedFastLocalModel = hasAutoSelectedFastLocalModel
         self.muteMusicWhileRecording = muteMusicWhileRecording
         self.historyEnabled = historyEnabled
+        self.hotkeyBindings = hotkeyBindings
     }
 
     enum CodingKeys: String, CodingKey {
@@ -151,6 +156,7 @@ struct AppSettings: Codable {
         case hasAutoSelectedFastLocalModel
         case muteMusicWhileRecording
         case historyEnabled
+        case hotkeyBindings
     }
 
     init(from decoder: Decoder) throws {
@@ -168,6 +174,7 @@ struct AppSettings: Codable {
         ) ?? false
         muteMusicWhileRecording = try container.decodeIfPresent(Bool.self, forKey: .muteMusicWhileRecording) ?? false
         historyEnabled = try container.decodeIfPresent(Bool.self, forKey: .historyEnabled) ?? true
+        hotkeyBindings = try container.decodeIfPresent([String: HotkeyBinding].self, forKey: .hotkeyBindings) ?? [:]
     }
 }
 

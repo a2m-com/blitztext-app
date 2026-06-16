@@ -41,6 +41,7 @@ final class AppState {
             saveSettings()
             prewarmLocalTranscriptionIfNeeded()
             SystemAudioMuteService.shared.isEnabled = appSettings.muteMusicWhileRecording
+            hotkeyService.bindings = resolvedHotkeyBindings
         }
     }
     var transcriptionSettings: TranscriptionSettings {
@@ -58,6 +59,33 @@ final class AppState {
 
     // Hotkeys
     let hotkeyService = HotkeyService()
+
+    /// Aktuelle Belegung pro Workflow: gespeicherter Wert oder Standard.
+    var resolvedHotkeyBindings: [WorkflowType: HotkeyBinding] {
+        var result = HotkeyBinding.defaults()
+        for type in WorkflowType.allCases {
+            if let stored = appSettings.hotkeyBindings[type.rawValue] {
+                result[type] = stored
+            }
+        }
+        return result
+    }
+
+    func binding(for type: WorkflowType) -> HotkeyBinding {
+        resolvedHotkeyBindings[type] ?? HotkeyBinding.default(for: type)
+    }
+
+    func setHotkeyBinding(_ binding: HotkeyBinding, for type: WorkflowType) {
+        appSettings.hotkeyBindings[type.rawValue] = binding
+    }
+
+    func resetHotkeyBinding(for type: WorkflowType) {
+        appSettings.hotkeyBindings[type.rawValue] = HotkeyBinding.default(for: type)
+    }
+
+    func resetAllHotkeyBindings() {
+        appSettings.hotkeyBindings = [:]
+    }
 
     // Lokaler Verlauf der erzeugten Texte (Sicherheitsnetz)
     let history = TranscriptHistoryService()
@@ -81,6 +109,7 @@ final class AppState {
         self.dampfAblassenSettings = Self.loadDampfAblassenSettings()
         self.emojiTextSettings = Self.loadEmojiTextSettings()
         SystemAudioMuteService.shared.isEnabled = appSettings.muteMusicWhileRecording
+        hotkeyService.bindings = resolvedHotkeyBindings
         refreshAccessibilityPermission()
         autoSelectFastLocalModelIfNeeded()
         prewarmLocalTranscriptionIfNeeded()

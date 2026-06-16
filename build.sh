@@ -89,6 +89,14 @@ PROJECT_FILE="$PROJECT_DIR/BlitztextMac.xcodeproj"
 DERIVED_DATA_PATH="$SCRIPT_DIR/.derivedData-blitztextmac-build"
 cd "$PROJECT_DIR"
 
+# App-Name aus PRODUCT_NAME in project.yml ableiten (z. B. "Blitztext 2").
+# So heisst die erzeugte .app immer wie in der project.yml konfiguriert.
+APP_NAME="$(grep -m1 'PRODUCT_NAME:' "$PROJECT_DIR/project.yml" | sed 's/.*PRODUCT_NAME:[[:space:]]*//' | sed 's/[[:space:]]*$//')"
+if [ -z "$APP_NAME" ]; then
+    APP_NAME="Blitztext"
+fi
+echo "📦 App-Name: $APP_NAME"
+
 ensure_xcodebuild_available
 
 if command -v xcodegen &> /dev/null; then
@@ -117,7 +125,7 @@ xcodebuild \
     clean build
 
 # App finden
-APP_PATH="$DERIVED_DATA_PATH/Build/Products/$BUILD_CONFIGURATION/Blitztext.app"
+APP_PATH="$DERIVED_DATA_PATH/Build/Products/$BUILD_CONFIGURATION/$APP_NAME.app"
 
 if [ ! -d "$APP_PATH" ]; then
     echo "❌ Build fehlgeschlagen – keine App gefunden."
@@ -135,7 +143,7 @@ cp -f "$PROJECT_DIR/Resources/menubar_icon.png" "$RESOURCES_DIR/" 2>/dev/null ||
 cp -f "$PROJECT_DIR/Resources/menubar_icon@2x.png" "$RESOURCES_DIR/" 2>/dev/null || true
 
 # In Projektordner kopieren
-DEST="$SCRIPT_DIR/Blitztext.app"
+DEST="$SCRIPT_DIR/$APP_NAME.app"
 rm -rf "$DEST"
 cp -R "$APP_PATH" "$DEST"
 echo "🔏 Signiere lokale Development-App ad-hoc. Dieses Artefakt ist nicht notarisiert."
@@ -146,7 +154,7 @@ RUN_TARGET="$DEST"
 
 if [ "$INSTALL_APP" = true ]; then
     APPS_DIR="/Applications"
-    INSTALL_DEST="$APPS_DIR/Blitztext.app"
+    INSTALL_DEST="$APPS_DIR/$APP_NAME.app"
     if [ ! -w "$APPS_DIR" ]; then
         echo "❌ /Applications ist nicht beschreibbar."
         echo "   Fuehre den Befehl mit passenden Rechten erneut aus oder ziehe die App manuell nach /Applications."

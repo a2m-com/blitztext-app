@@ -23,109 +23,139 @@ enum HotkeyMode: String, Codable, CaseIterable, Identifiable {
 }
 
 enum HotkeyEvent {
-    case down(WorkflowType)  // Keys pressed
-    case up(WorkflowType)    // Keys released (for hold mode)
-    case cancel              // Escape pressed
+    case down(WorkflowType)  // Kürzel ausgelöst (Tasten/Maustaste gedrückt)
+    case up(WorkflowType)    // Kürzel losgelassen (für Halten-Modus)
+    case cancel              // Escape gedrückt
 }
 
 @Observable
 @MainActor
 final class HotkeyService {
-    private var globalMonitor: Any?
-    private var localMonitor: Any?
-    private var keyMonitor: Any?
-    private var activeCombo: WorkflowType?  // Which combo is currently held
+    private var monitors: [Any] = []
+
+    /// Welche Quelle hat das aktuell aktive Kürzel ausgelöst?
+    private enum TriggerSource { case modifier, key, mouse }
+    private var activeType: WorkflowType?
+    private var activeSource: TriggerSource?
+    private var activeKeyCode: UInt16?
+    private var activeButton: Int?
+
+    /// Aktuell gültige Belegung pro Workflow. Wird von `AppState` aktuell gehalten.
+    var bindings: [WorkflowType: HotkeyBinding] = HotkeyBinding.defaults()
 
     var onHotkeyEvent: ((HotkeyEvent) -> Void)?
 
     func start() {
-        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            Task { @MainActor in
-                self?.handleFlags(event)
-            }
-        }
-        localMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
-            Task { @MainActor in
-                self?.handleFlags(event)
-            }
-            return event
-        }
-        // Escape key monitor for toggle mode
-        keyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            Task { @MainActor in
-                if event.keyCode == 53 { // Escape
-                    self?.handleEscape()
-                }
-            }
-        }
+        stop() // doppelte Monitore vermeiden
+        addBoth(.flagsChanged) { [weak self] event in self?.handleFlags(event) }
+        addBoth(.keyDown) { [weak self] event in self?.handleKeyDown(event) }
+        addBoth(.keyUp) { [weak self] event in self?.handleKeyUp(event) }
+        addBoth(.otherMouseDown) { [weak self] event in self?.handleMouseDown(event) }
+        addBoth(.otherMouseUp) { [weak self] event in self?.handleMouseUp(event) }
     }
 
     func stop() {
-        if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
-        if let localMonitor { NSEvent.removeMonitor(localMonitor) }
-        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
-        globalMonitor = nil
-        localMonitor = nil
-        keyMonitor = nil
+        for monitor in monitors { NSEvent.removeMonitor(monitor) }
+        monitors.removeAll()
+        resetActive()
     }
+
+    /// Registriert einen globalen (andere Apps) und einen lokalen (eigene App) Monitor.
+    private func addBoth(_ mask: NSEvent.EventTypeMask, _ body: @escaping @MainActor (NSEvent) -> Void) {
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { event in
+            Task { @MainActor in body(event) }
+        }) {
+            monitors.append(global)
+        }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { event in
+            Task { @MainActor in body(event) }
+            return event
+        }) {
+            monitors.append(local)
+        }
+    }
+
+    // MARK: - Tastatur (Modifier)
 
     private func handleFlags(_ event: NSEvent) {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
-        // fn + Shift + Control -> local transcription
-        if flags == [.function, .shift, .control] {
-            if activeCombo == nil {
-                activeCombo = .localTranscription
-                onHotkeyEvent?(.down(.localTranscription))
+        // Passt eine reine Modifier-Kombination exakt?
+        if let match = bindings.first(where: { $0.value.matchesModifierOnly(flags: flags) }) {
+            if activeType == nil {
+                beginTrigger(match.key, source: .modifier)
             }
             return
         }
 
-        // fn + Shift -> transcription
-        if flags == [.function, .shift] {
-            if activeCombo == nil {
-                activeCombo = .transcription
-                onHotkeyEvent?(.down(.transcription))
-            }
-            return
-        }
-
-        // fn + Control -> Textverbesserer
-        if flags == [.function, .control] {
-            if activeCombo == nil {
-                activeCombo = .textImprover
-                onHotkeyEvent?(.down(.textImprover))
-            }
-            return
-        }
-
-        // fn + Option -> Rage Mode
-        if flags == [.function, .option] {
-            if activeCombo == nil {
-                activeCombo = .dampfAblassen
-                onHotkeyEvent?(.down(.dampfAblassen))
-            }
-            return
-        }
-
-        // fn + Command -> Emoji Mode
-        if flags == [.function, .command] {
-            if activeCombo == nil {
-                activeCombo = .emojiText
-                onHotkeyEvent?(.down(.emojiText))
-            }
-            return
-        }
-
-        // Keys released -- fire up event
-        if let combo = activeCombo {
-            activeCombo = nil
-            onHotkeyEvent?(.up(combo))
+        // Keine Modifier-Kombination trifft mehr -> aktives Halten beenden.
+        if activeSource == .modifier {
+            endTrigger()
         }
     }
 
+    // MARK: - Tastatur (Einzeltaste)
+
+    private func handleKeyDown(_ event: NSEvent) {
+        if event.keyCode == 53 { // Escape bricht immer ab
+            handleEscape()
+            return
+        }
+        guard activeType == nil else { return } // kein Auto-Repeat erneut auslösen
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if let match = bindings.first(where: { $0.value.matchesKey(keyCode: event.keyCode, flags: flags) }) {
+            activeKeyCode = event.keyCode
+            beginTrigger(match.key, source: .key)
+        }
+    }
+
+    private func handleKeyUp(_ event: NSEvent) {
+        guard activeSource == .key, event.keyCode == activeKeyCode else { return }
+        endTrigger()
+    }
+
+    // MARK: - Maus-Zusatztasten
+
+    private func handleMouseDown(_ event: NSEvent) {
+        let button = event.buttonNumber
+        // Nur Zusatztasten ab der dritten Taste. Links/Rechts kommen ohnehin nicht
+        // als .otherMouseDown an und werden hier zusätzlich ausgeschlossen.
+        guard button >= 2 else { return }
+        guard activeType == nil else { return }
+        if let match = bindings.first(where: { $0.value.matchesMouse(button: button) }) {
+            activeButton = button
+            beginTrigger(match.key, source: .mouse)
+        }
+    }
+
+    private func handleMouseUp(_ event: NSEvent) {
+        guard activeSource == .mouse, event.buttonNumber == activeButton else { return }
+        endTrigger()
+    }
+
+    // MARK: - Auslösen / Beenden
+
+    private func beginTrigger(_ type: WorkflowType, source: TriggerSource) {
+        activeType = type
+        activeSource = source
+        onHotkeyEvent?(.down(type))
+    }
+
+    private func endTrigger() {
+        guard let type = activeType else { return }
+        resetActive()
+        onHotkeyEvent?(.up(type))
+    }
+
     private func handleEscape() {
-        activeCombo = nil
+        resetActive()
         onHotkeyEvent?(.cancel)
+    }
+
+    private func resetActive() {
+        activeType = nil
+        activeSource = nil
+        activeKeyCode = nil
+        activeButton = nil
     }
 }

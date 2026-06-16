@@ -11,8 +11,8 @@ settings:
     SWIFT_VERSION: "5.10"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
     ONLY_ACTIVE_ARCH: NO
-    MARKETING_VERSION: "1.7"
-    CURRENT_PROJECT_VERSION: "17"
+    MARKETING_VERSION: "1.8"
+    CURRENT_PROJECT_VERSION: "18"
 
 packages:
   ArgmaxOSS:
@@ -36,8 +36,8 @@ targets:
           - BlitztextMac.entitlements
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: app.blitztext.mac
-        PRODUCT_NAME: Blitztext
+        PRODUCT_BUNDLE_IDENTIFIER: app.blitztext.mac.v2
+        PRODUCT_NAME: Blitztext 2
         INFOPLIST_FILE: Resources/Info.plist
         INFOPLIST_KEY_CFBundleShortVersionString: $(MARKETING_VERSION)
         INFOPLIST_KEY_CFBundleVersion: $(CURRENT_PROJECT_VERSION)
