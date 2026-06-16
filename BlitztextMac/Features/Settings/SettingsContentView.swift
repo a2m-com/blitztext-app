@@ -999,10 +999,14 @@ private struct HotkeyBindingsSection: View {
 
             Spacer()
 
-            Button(isThisCapturing ? "\u{2026}" : "\u{00C4}ndern") {
+            Button {
                 startCapture(for: type)
+            } label: {
+                Image(systemName: isThisCapturing ? "record.circle" : "pencil")
+                    .foregroundStyle(isThisCapturing ? Color.red : Color.secondary)
             }
             .buttonStyle(SubtleButtonStyle())
+            .help("K\u{00FC}rzel \u{00E4}ndern \u{2013} dann gew\u{00FC}nschte Taste(n) oder Maus-Zusatztaste dr\u{00FC}cken")
             .disabled(otherIsCapturing)
 
             Button {
@@ -1010,6 +1014,7 @@ private struct HotkeyBindingsSection: View {
                 warningText = ""
             } label: {
                 Image(systemName: "arrow.uturn.backward")
+                    .foregroundStyle(.secondary)
             }
             .buttonStyle(SubtleButtonStyle())
             .help("Auf Standard zur\u{00FC}cksetzen")
